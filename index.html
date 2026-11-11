@@ -1,0 +1,1277 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Inventori Stor Kelab Sukan</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0284c7',
+                            600: '#0369a1',
+                            700: '#075985',
+                            900: '#0c4a6e',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        [x-cloak] { display: none !important; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased min-h-screen flex flex-col" x-data="inventoryApp()" x-init="initCharts()">
+
+    <!-- Top Navigation Header -->
+    <header class="bg-slate-900 text-white sticky top-0 z-30 shadow-md">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <!-- Logo & Title -->
+                <div class="flex items-center space-x-3">
+                    <div class="bg-brand-500 text-white p-2.5 rounded-xl flex items-center justify-center shadow-lg shadow-brand-500/30">
+                        <i class="fa-solid fa-volleyball text-xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-lg leading-tight tracking-wide">SPORTSTORAGE Pro</h1>
+                        <p class="text-xs text-slate-400">Sistem Inventori Stor Kelab Sukan</p>
+                    </div>
+                </div>
+
+                <!-- Right Header Tools -->
+                <div class="flex items-center space-x-3">
+                    <!-- Quick Scan Button -->
+                    <button @click="openScannerModal = true" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-medium px-3 py-2 rounded-lg flex items-center space-x-2 transition shadow-sm">
+                        <i class="fa-solid fa-qrcode text-base"></i>
+                        <span class="hidden sm:inline">Imbas Kod Bar</span>
+                    </button>
+
+                    <!-- Alert Badge -->
+                    <div class="relative" x-data="{ open: false }">
+                        <button @click="open = !open" class="p-2 text-slate-300 hover:text-white rounded-lg hover:bg-slate-800 relative transition">
+                            <i class="fa-regular fa-bell text-lg"></i>
+                            <template x-if="overdueLogs.length > 0">
+                                <span class="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-rose-500 rounded-full ring-2 ring-slate-900"></span>
+                            </template>
+                        </button>
+                        <!-- Notifications Dropdown -->
+                        <div x-show="open" @click.away="open = false" x-cloak class="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-slate-100 text-slate-800 z-50 py-2">
+                            <div class="px-4 py-2 border-b border-slate-100 flex justify-between items-center">
+                                <span class="font-semibold text-xs text-slate-500 uppercase tracking-wider">Notifikasi & Amaran</span>
+                                <span class="text-xs bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-medium" x-text="overdueLogs.length + ' Lewat'"></span>
+                            </div>
+                            <div class="max-h-64 overflow-y-auto divide-y divide-slate-100">
+                                <template x-for="log in overdueLogs" :key="log.id">
+                                    <div class="p-3 hover:bg-slate-50 transition">
+                                        <div class="flex items-start space-x-2">
+                                            <i class="fa-solid fa-circle-exclamation text-rose-500 mt-0.5"></i>
+                                            <div class="text-xs">
+                                                <p class="font-medium text-slate-900" x-text="getMemberName(log.memberId) + ' belum pulangkan item'"></p>
+                                                <p class="text-slate-500" x-text="getItemName(log.itemId) + ' (' + log.qty + ' unit)'"></p>
+                                                <p class="text-rose-600 font-medium mt-1 text-[11px]" x-text="'Jangka Pulang: ' + log.dueDate"></p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+                                <template x-if="overdueLogs.length === 0">
+                                    <div class="p-4 text-center text-xs text-slate-400">
+                                        Tiada pinjaman terlewat setakat ini.
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- User Profile Avatar -->
+                    <div class="flex items-center space-x-2 border-l border-slate-700 pl-3">
+                        <div class="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center font-bold text-xs text-white">
+                            JK
+                        </div>
+                        <span class="text-xs font-medium text-slate-300 hidden md:inline">Pengurus Stor</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="bg-slate-800 border-t border-slate-700/60">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <nav class="flex space-x-1 sm:space-x-4 overflow-x-auto py-2 text-xs sm:text-sm scrollbar-none">
+                    <button @click="activeTab = 'dashboard'" :class="activeTab === 'dashboard' ? 'bg-brand-600 text-white' : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'" class="px-3 py-2 rounded-lg font-medium transition flex items-center space-x-2 whitespace-nowrap">
+                        <i class="fa-solid fa-chart-pie"></i>
+                        <span>Papan Pemuka</span>
+                    </button>
+                    <button @click="activeTab = 'katalog'" :class="activeTab === 'katalog' ? 'bg-brand-600 text-white' : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'" class="px-3 py-2 rounded-lg font-medium transition flex items-center space-x-2 whitespace-nowrap">
+                        <i class="fa-solid fa-boxes-stacked"></i>
+                        <span>Katalog Alatan</span>
+                    </button>
+                    <button @click="activeTab = 'pinjaman'" :class="activeTab === 'pinjaman' ? 'bg-brand-600 text-white' : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'" class="px-3 py-2 rounded-lg font-medium transition flex items-center space-x-2 whitespace-nowrap relative">
+                        <i class="fa-solid fa-hand-holding-hand"></i>
+                        <span>Log Pinjaman</span>
+                        <template x-if="overdueLogs.length > 0">
+                            <span class="w-2 h-2 bg-rose-500 rounded-full"></span>
+                        </template>
+                    </button>
+                    <button @click="activeTab = 'ahli'" :class="activeTab === 'ahli' ? 'bg-brand-600 text-white' : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'" class="px-3 py-2 rounded-lg font-medium transition flex items-center space-x-2 whitespace-nowrap">
+                        <i class="fa-solid fa-users"></i>
+                        <span>Ahli & Jurulatih</span>
+                    </button>
+                    <button @click="activeTab = 'penyelenggaraan'" :class="activeTab === 'penyelenggaraan' ? 'bg-brand-600 text-white' : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'" class="px-3 py-2 rounded-lg font-medium transition flex items-center space-x-2 whitespace-nowrap">
+                        <i class="fa-solid fa-wrench"></i>
+                        <span>Penyelenggaraan & Kos</span>
+                    </button>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+        <!-- ================= TAB 1: PAPAN PEMUKA (DASHBOARD) ================= -->
+        <div x-show="activeTab === 'dashboard'" x-cloak class="space-x-0 space-y-6">
+            
+            <!-- Key Metric Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- Total Items -->
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/80 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Jumlah Keseluruhan Stok</p>
+                        <h3 class="text-2xl font-bold text-slate-800 mt-1" x-text="totalStockCount">0</h3>
+                        <p class="text-xs text-slate-400 mt-1"><span class="text-emerald-600 font-semibold" x-text="items.length"></span> Jenis Produk</p>
+                    </div>
+                    <div class="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-layer-group"></i>
+                    </div>
+                </div>
+
+                <!-- Borrowed Items -->
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/80 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Alatan Sedang Dipinjam</p>
+                        <h3 class="text-2xl font-bold text-amber-600 mt-1" x-text="totalBorrowedCount">0</h3>
+                        <p class="text-xs text-rose-500 mt-1 font-medium"><span x-text="overdueLogs.length"></span> Pinjaman Terlewat</p>
+                    </div>
+                    <div class="w-12 h-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-clock-rotate-left"></i>
+                    </div>
+                </div>
+
+                <!-- In Maintenance / Damaged -->
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/80 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Rosak / Dalam Baiki</p>
+                        <h3 class="text-2xl font-bold text-rose-600 mt-1" x-text="totalDamagedCount">0</h3>
+                        <p class="text-xs text-slate-400 mt-1">Perlu tindakan pelupusan/baiki</p>
+                    </div>
+                    <div class="w-12 h-12 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                    </div>
+                </div>
+
+                <!-- Inventory Total Value -->
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/80 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Anggaran Nilai Aset</p>
+                        <h3 class="text-2xl font-bold text-emerald-600 mt-1" x-text="'RM ' + totalAssetValue.toLocaleString('ms-MY', {minimumFractionDigits: 2})">RM 0.00</h3>
+                        <p class="text-xs text-slate-400 mt-1">Berdasarkan kos unit purata</p>
+                    </div>
+                    <div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-vault"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Bar Chart: Stock by Category -->
+                <div class="lg:col-span-2 bg-white p-5 rounded-2xl shadow-sm border border-slate-200/80">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="font-bold text-slate-800 text-sm sm:text-base flex items-center space-x-2">
+                            <i class="fa-solid fa-chart-column text-brand-500"></i>
+                            <span>Taburan Stok Mengikut Kategori Sukan</span>
+                        </h2>
+                    </div>
+                    <div class="h-64 relative">
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Pie Chart: Status Breakdown -->
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/80">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="font-bold text-slate-800 text-sm sm:text-base flex items-center space-x-2">
+                            <i class="fa-solid fa-chart-pie text-brand-500"></i>
+                            <span>Status Fizikal Alatan</span>
+                        </h2>
+                    </div>
+                    <div class="h-64 relative flex items-center justify-center">
+                        <canvas id="statusChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Overdue & Quick Action Section -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Overdue Borrowings Table Widget -->
+                <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
+                    <div class="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-rose-50/40">
+                        <h2 class="font-bold text-rose-800 text-sm sm:text-base flex items-center space-x-2">
+                            <i class="fa-solid fa-bell text-rose-600"></i>
+                            <span>Senarai Pinjaman Terlewat Pulang (Overdue)</span>
+                        </h2>
+                        <span class="text-xs bg-rose-600 text-white font-semibold px-2.5 py-0.5 rounded-full" x-text="overdueLogs.length"></span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs sm:text-sm">
+                            <thead class="bg-slate-50 text-slate-500 font-semibold uppercase text-[11px] border-b border-slate-100">
+                                <tr>
+                                    <th class="px-4 py-3">Peminjam / Skuad</th>
+                                    <th class="px-4 py-3">Peralatan</th>
+                                    <th class="px-4 py-3">Kuantiti</th>
+                                    <th class="px-4 py-3">Tarikh Jangka Pulang</th>
+                                    <th class="px-4 py-3 text-right">Tindakan</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                <template x-for="log in overdueLogs" :key="log.id">
+                                    <tr class="hover:bg-rose-50/20 transition">
+                                        <td class="px-4 py-3">
+                                            <p class="font-semibold text-slate-800" x-text="getMemberName(log.memberId)"></p>
+                                            <p class="text-xs text-slate-400" x-text="getMemberSquad(log.memberId)"></p>
+                                        </td>
+                                        <td class="px-4 py-3 font-medium text-slate-700" x-text="getItemName(log.itemId)"></td>
+                                        <td class="px-4 py-3 font-semibold text-slate-800" x-text="log.qty + ' unit'"></td>
+                                        <td class="px-4 py-3">
+                                            <span class="text-rose-600 font-bold bg-rose-100 px-2 py-0.5 rounded text-xs" x-text="log.dueDate"></span>
+                                        </td>
+                                        <td class="px-4 py-3 text-right">
+                                            <button @click="returnItem(log.id)" class="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded text-xs font-medium transition shadow-sm">
+                                                Daftar Pulang
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </template>
+                                <template x-if="overdueLogs.length === 0">
+                                    <tr>
+                                        <td colspan="5" class="px-4 py-6 text-center text-slate-400 text-xs">
+                                            <i class="fa-solid fa-circle-check text-emerald-500 text-xl mb-1 block"></i>
+                                            Tiada tunggakan pemulangan. Semua alatan dipulangkan mengikut jadual!
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Quick Action Buttons Box -->
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/80 flex flex-col justify-between">
+                    <div>
+                        <h2 class="font-bold text-slate-800 text-sm sm:text-base mb-3 flex items-center space-x-2">
+                            <i class="fa-solid fa-bolt text-amber-500"></i>
+                            <span>Tindakan Pantas</span>
+                        </h2>
+                        <p class="text-xs text-slate-500 mb-4">Pintas tugasan harian stor dengan pantas dari sini.</p>
+                        
+                        <div class="space-y-3">
+                            <button @click="openBorrowModal = true" class="w-full bg-brand-50 hover:bg-brand-100 text-brand-700 font-medium p-3 rounded-xl flex items-center justify-between transition border border-brand-200">
+                                <span class="flex items-center space-x-2 text-xs sm:text-sm">
+                                    <i class="fa-solid fa-hand-holding text-brand-600"></i>
+                                    <span>Rekod Pinjaman Baru</span>
+                                </span>
+                                <i class="fa-solid fa-chevron-right text-xs"></i>
+                            </button>
+
+                            <button @click="openAddItemModal = true" class="w-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-medium p-3 rounded-xl flex items-center justify-between transition border border-emerald-200">
+                                <span class="flex items-center space-x-2 text-xs sm:text-sm">
+                                    <i class="fa-solid fa-plus-circle text-emerald-600"></i>
+                                    <span>Tambah Stok / Item Baru</span>
+                                </span>
+                                <i class="fa-solid fa-chevron-right text-xs"></i>
+                            </button>
+
+                            <button @click="openMaintenanceModal = true" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium p-3 rounded-xl flex items-center justify-between transition border border-slate-200">
+                                <span class="flex items-center space-x-2 text-xs sm:text-sm">
+                                    <i class="fa-solid fa-screwdriver-wrench text-slate-600"></i>
+                                    <span>Lapor Kerosakan / Baiki</span>
+                                </span>
+                                <i class="fa-solid fa-chevron-right text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 pt-4 border-t border-slate-100 text-center">
+                        <span class="text-[11px] text-slate-400">Kemaskini Terakhir: 7 Nov 2026, 04:00 PM</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- ================= TAB 2: KATALOG ALATAN (MASTER DATA) ================= -->
+        <div x-show="activeTab === 'katalog'" x-cloak class="space-y-4">
+            
+            <!-- Controls Bar: Search, Filter & Add Button -->
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200/80 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div class="flex flex-col sm:flex-row items-center gap-2 flex-grow">
+                    <!-- Search Input -->
+                    <div class="relative w-full sm:w-72">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-sm"></i>
+                        <input type="text" x-model="searchCatalog" placeholder="Cari nama, SKU, rak..." class="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                    </div>
+                    <!-- Category Filter -->
+                    <select x-model="filterCategory" class="w-full sm:w-44 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                        <option value="">Semua Kategori</option>
+                        <option value="Bola">Bola</option>
+                        <option value="Raket">Raket</option>
+                        <option value="Pakaian">Pakaian</option>
+                        <option value="Latihan">Latihan / Fitness</option>
+                        <option value="Keselamatan">Keselamatan / First Aid</option>
+                    </select>
+                    <!-- Grade Filter -->
+                    <select x-model="filterGrade" class="w-full sm:w-44 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                        <option value="">Semua Gred</option>
+                        <option value="Gred A (Pertandingan)">Gred A (Match)</option>
+                        <option value="Gred B (Latihan)">Gred B (Latihan)</option>
+                        <option value="Umum">Umum</option>
+                    </select>
+                </div>
+
+                <button @click="openAddItemModal = true" class="bg-brand-600 hover:bg-brand-700 text-white font-medium px-4 py-2 rounded-xl text-xs sm:text-sm flex items-center justify-center space-x-2 transition shadow-sm whitespace-nowrap">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>Daftar Alatan Baru</span>
+                </button>
+            </div>
+
+            <!-- Catalog Data Table -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs sm:text-sm">
+                        <thead class="bg-slate-800 text-slate-200 font-semibold uppercase text-[11px] tracking-wider">
+                            <tr>
+                                <th class="px-4 py-3.5">ID / Kod Bar</th>
+                                <th class="px-4 py-3.5">Nama Peralatan</th>
+                                <th class="px-4 py-3.5">Kategori & Gred</th>
+                                <th class="px-4 py-3.5">Lokasi Rak</th>
+                                <th class="px-4 py-3.5 text-center">Jumlah Stok</th>
+                                <th class="px-4 py-3.5 text-center">Dipinjam</th>
+                                <th class="px-4 py-3.5 text-center">Rosak/Lupus</th>
+                                <th class="px-4 py-3.5 text-center bg-slate-700 text-emerald-400">Baki Sedia Ada</th>
+                                <th class="px-4 py-3.5 text-right">Tindakan</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <template x-for="item in filteredCatalog" :key="item.id">
+                                <tr class="hover:bg-slate-50/80 transition">
+                                    <td class="px-4 py-3">
+                                        <span class="font-mono font-bold text-slate-700" x-text="item.id"></span>
+                                        <p class="text-[11px] text-slate-400 font-mono" x-text="item.barcode"></p>
+                                    </td>
+                                    <td class="px-4 py-3 font-semibold text-slate-800">
+                                        <span x-text="item.name"></span>
+                                        <p class="text-[11px] text-slate-400 font-normal" x-text="'Anggaran Kos: RM ' + item.unitCost.toFixed(2) + '/unit'"></p>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <span class="inline-block px-2 py-0.5 bg-slate-100 text-slate-700 font-medium rounded text-xs mb-0.5" x-text="item.category"></span>
+                                        <br>
+                                        <span class="text-[11px] text-brand-600 font-medium" x-text="item.grade"></span>
+                                    </td>
+                                    <td class="px-4 py-3 font-medium text-slate-600">
+                                        <span class="inline-flex items-center space-x-1 bg-amber-50 text-amber-800 px-2 py-0.5 rounded text-xs border border-amber-200/60">
+                                            <i class="fa-solid fa-location-dot text-[10px] text-amber-600"></i>
+                                            <span x-text="item.location"></span>
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3 text-center font-bold text-slate-700" x-text="item.totalStock"></td>
+                                    <td class="px-4 py-3 text-center font-semibold text-amber-600" x-text="getBorrowedCountForItem(item.id)"></td>
+                                    <td class="px-4 py-3 text-center font-semibold text-rose-600" x-text="item.damaged"></td>
+                                    <td class="px-4 py-3 text-center bg-emerald-50/40">
+                                        <span class="font-extrabold text-sm px-2.5 py-1 rounded-lg"
+                                              :class="calculateAvailable(item) > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-700'"
+                                              x-text="calculateAvailable(item)"></span>
+                                    </td>
+                                    <td class="px-4 py-3 text-right space-x-1 whitespace-nowrap">
+                                        <button @click="editItem(item)" class="p-1.5 text-slate-500 hover:text-brand-600 hover:bg-slate-100 rounded-lg transition" title="Edit Item">
+                                            <i class="fa-solid fa-pen-to-square"></i>
+                                        </button>
+                                        <button @click="deleteItem(item.id)" class="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-slate-100 rounded-lg transition" title="Padam Item">
+                                            <i class="fa-solid fa-trash-can"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            </template>
+                            <template x-if="filteredCatalog.length === 0">
+                                <tr>
+                                    <td colspan="9" class="px-4 py-8 text-center text-slate-400 text-xs">
+                                        Tiada rekod alatan ditemui sepadan dengan carian anda.
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- ================= TAB 3: LOG PINJAMAN & PEMULANGAN ================= -->
+        <div x-show="activeTab === 'pinjaman'" x-cloak class="space-y-4">
+            
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200/80 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div class="flex flex-col sm:flex-row items-center gap-2 flex-grow">
+                    <!-- Search Input -->
+                    <div class="relative w-full sm:w-72">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-sm"></i>
+                        <input type="text" x-model="searchLogs" placeholder="Cari peminjam, item, skuad..." class="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                    </div>
+                    <!-- Status Filter -->
+                    <select x-model="filterLogStatus" class="w-full sm:w-44 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                        <option value="">Semua Status</option>
+                        <option value="Dipinjam">Sedang Dipinjam</option>
+                        <option value="Dipulangkan">Dipulangkan</option>
+                        <option value="Overdue">Terlewat Pulang</option>
+                    </select>
+                </div>
+
+                <button @click="openBorrowModal = true" class="bg-brand-600 hover:bg-brand-700 text-white font-medium px-4 py-2 rounded-xl text-xs sm:text-sm flex items-center justify-center space-x-2 transition shadow-sm whitespace-nowrap">
+                    <i class="fa-solid fa-hand-holding"></i>
+                    <span>Cipta Log Pinjaman</span>
+                </button>
+            </div>
+
+            <!-- Borrowing Log Table -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs sm:text-sm">
+                        <thead class="bg-slate-800 text-slate-200 font-semibold uppercase text-[11px] tracking-wider">
+                            <tr>
+                                <th class="px-4 py-3.5">ID Log / Tarikh</th>
+                                <th class="px-4 py-3.5">Peralatan</th>
+                                <th class="px-4 py-3.5">Peminjam / Skuad</th>
+                                <th class="px-4 py-3.5 text-center">Kuantiti</th>
+                                <th class="px-4 py-3.5">Tujuan / Perlawanan</th>
+                                <th class="px-4 py-3.5">Tarikh Jangka Pulang</th>
+                                <th class="px-4 py-3.5">Status</th>
+                                <th class="px-4 py-3.5 text-right">Tindakan</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <template x-for="log in filteredLogs" :key="log.id">
+                                <tr :class="isOverdue(log) ? 'bg-rose-50/50 hover:bg-rose-50' : 'hover:bg-slate-50/80'" class="transition">
+                                    <td class="px-4 py-3">
+                                        <span class="font-mono font-bold text-slate-700" x-text="log.id"></span>
+                                        <p class="text-[11px] text-slate-400" x-text="log.issueDate"></p>
+                                    </td>
+                                    <td class="px-4 py-3 font-semibold text-slate-800" x-text="getItemName(log.itemId)"></td>
+                                    <td class="px-4 py-3">
+                                        <span class="font-semibold text-slate-800" x-text="getMemberName(log.memberId)"></span>
+                                        <p class="text-[11px] text-slate-400" x-text="getMemberSquad(log.memberId)"></p>
+                                    </td>
+                                    <td class="px-4 py-3 text-center font-bold text-slate-700" x-text="log.qty"></td>
+                                    <td class="px-4 py-3 text-slate-600" x-text="log.purpose"></td>
+                                    <td class="px-4 py-3">
+                                        <span class="font-medium" :class="isOverdue(log) ? 'text-rose-600 font-bold' : 'text-slate-600'" x-text="log.dueDate"></span>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <template x-if="log.status === 'Dipulangkan'">
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                                                <i class="fa-solid fa-circle-check text-[10px] mr-1.5"></i> Dipulangkan
+                                            </span>
+                                        </template>
+                                        <template x-if="log.status === 'Dipinjam' && !isOverdue(log)">
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                                                <i class="fa-solid fa-clock text-[10px] mr-1.5"></i> Dipinjam
+                                            </span>
+                                        </template>
+                                        <template x-if="isOverdue(log)">
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-600 text-white shadow-sm">
+                                                <i class="fa-solid fa-triangle-exclamation text-[10px] mr-1.5"></i> Terlewat
+                                            </span>
+                                        </template>
+                                    </td>
+                                    <td class="px-4 py-3 text-right">
+                                        <template x-if="log.status === 'Dipinjam'">
+                                            <button @click="returnItem(log.id)" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-3 py-1 rounded-lg text-xs transition shadow-sm">
+                                                Daftar Pulang
+                                            </button>
+                                        </template>
+                                        <template x-if="log.status === 'Dipulangkan'">
+                                            <span class="text-xs text-slate-400 italic" x-text="'Pulang: ' + (log.returnDate || '-')"></span>
+                                        </template>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- ================= TAB 4: AHLI & JURULATIH ================= -->
+        <div x-show="activeTab === 'ahli'" x-cloak class="space-y-4">
+            
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div class="relative w-full sm:w-80">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-sm"></i>
+                    <input type="text" x-model="searchMembers" placeholder="Cari nama ahli, no tel, skuad..." class="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                </div>
+
+                <button @click="openAddMemberModal = true" class="bg-brand-600 hover:bg-brand-700 text-white font-medium px-4 py-2 rounded-xl text-xs sm:text-sm flex items-center justify-center space-x-2 transition shadow-sm w-full sm:w-auto">
+                    <i class="fa-solid fa-user-plus"></i>
+                    <span>Daftar Ahli / Jurulatih</span>
+                </button>
+            </div>
+
+            <!-- Members Cards Grid -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <template x-for="member in filteredMembers" :key="member.id">
+                    <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80 flex flex-col justify-between hover:border-brand-300 transition">
+                        <div>
+                            <div class="flex items-start justify-between">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm text-white"
+                                         :class="member.role === 'Jurulatih' ? 'bg-indigo-600' : 'bg-brand-500'"
+                                         x-text="member.name.substring(0,2).toUpperCase()"></div>
+                                    <div>
+                                        <h3 class="font-bold text-slate-800 text-sm" x-text="member.name"></h3>
+                                        <span class="text-xs font-medium text-slate-500" x-text="member.role + ' • ' + member.squad"></span>
+                                    </div>
+                                </div>
+                                <span class="px-2 py-0.5 text-[11px] font-semibold rounded-full bg-emerald-100 text-emerald-700" x-text="member.status"></span>
+                            </div>
+
+                            <div class="mt-4 pt-3 border-t border-slate-100 space-y-1.5 text-xs text-slate-600">
+                                <div class="flex items-center space-x-2">
+                                    <i class="fa-solid fa-id-badge text-slate-400 w-4"></i>
+                                    <span class="font-mono" x-text="member.id"></span>
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <i class="fa-solid fa-phone text-slate-400 w-4"></i>
+                                    <span x-text="member.phone"></span>
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <i class="fa-solid fa-box-archive text-slate-400 w-4"></i>
+                                    <span x-text="getActiveLoansForMember(member.id) + ' alatan sedang dipinjam'"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 pt-3 border-t border-slate-100 flex justify-end space-x-2">
+                            <button @click="deleteMember(member.id)" class="text-xs text-rose-600 hover:text-rose-800 font-medium px-2 py-1 rounded hover:bg-rose-50 transition">
+                                Padam
+                            </button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+
+        <!-- ================= TAB 5: PENYELENGGARAAN & KOS ================= -->
+        <div x-show="activeTab === 'penyelenggaraan'" x-cloak class="space-y-4">
+            
+            <!-- Summary Stats for Maintenance -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+                    <p class="text-xs text-slate-500 font-semibold uppercase">Jumlah Belian Baru</p>
+                    <p class="text-xl font-bold text-slate-800 mt-1" x-text="'RM ' + totalNewPurchasesCost.toFixed(2)">RM 0.00</p>
+                </div>
+                <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+                    <p class="text-xs text-slate-500 font-semibold uppercase">Kos Penyelenggaraan & Baiki</p>
+                    <p class="text-xl font-bold text-amber-600 mt-1" x-text="'RM ' + totalRepairCost.toFixed(2)">RM 0.00</p>
+                </div>
+                <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+                    <p class="text-xs text-slate-500 font-semibold uppercase">Unit Dilupuskan / Rosak</p>
+                    <p class="text-xl font-bold text-rose-600 mt-1" x-text="totalDisposedQty + ' Unit'">0 Unit</p>
+                </div>
+            </div>
+
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200/80 flex justify-between items-center">
+                <h2 class="font-bold text-slate-800 text-sm sm:text-base flex items-center space-x-2">
+                    <i class="fa-solid fa-receipt text-brand-600"></i>
+                    <span>Rekod Penyelenggaraan & Pembelian</span>
+                </h2>
+
+                <button @click="openMaintenanceModal = true" class="bg-brand-600 hover:bg-brand-700 text-white font-medium px-4 py-2 rounded-xl text-xs sm:text-sm flex items-center space-x-2 transition shadow-sm">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>Tambah Rekod Kos</span>
+                </button>
+            </div>
+
+            <!-- Maintenance Logs Table -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs sm:text-sm">
+                        <thead class="bg-slate-800 text-slate-200 font-semibold uppercase text-[11px] tracking-wider">
+                            <tr>
+                                <th class="px-4 py-3.5">ID Rekod / Tarikh</th>
+                                <th class="px-4 py-3.5">Peralatan</th>
+                                <th class="px-4 py-3.5 text-center">Kuantiti</th>
+                                <th class="px-4 py-3.5">Jenis Tindakan</th>
+                                <th class="px-4 py-3.5">Kos (RM)</th>
+                                <th class="px-4 py-3.5">Sumber Dana</th>
+                                <th class="px-4 py-3.5">Catatan</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <template x-for="m in maintenanceLogs" :key="m.id">
+                                <tr class="hover:bg-slate-50 transition">
+                                    <td class="px-4 py-3">
+                                        <span class="font-mono font-bold text-slate-700" x-text="m.id"></span>
+                                        <p class="text-[11px] text-slate-400" x-text="m.date"></p>
+                                    </td>
+                                    <td class="px-4 py-3 font-semibold text-slate-800" x-text="getItemName(m.itemId)"></td>
+                                    <td class="px-4 py-3 text-center font-bold text-slate-700" x-text="m.qty"></td>
+                                    <td class="px-4 py-3">
+                                        <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold"
+                                              :class="{
+                                                'bg-blue-100 text-blue-800': m.type === 'Belian Baru',
+                                                'bg-amber-100 text-amber-800': m.type === 'Penyelenggaraan',
+                                                'bg-rose-100 text-rose-800': m.type === 'Pelupusan'
+                                              }"
+                                              x-text="m.type"></span>
+                                    </td>
+                                    <td class="px-4 py-3 font-bold text-slate-800" x-text="'RM ' + m.cost.toFixed(2)"></td>
+                                    <td class="px-4 py-3 text-slate-600" x-text="m.funding"></td>
+                                    <td class="px-4 py-3 text-slate-500 italic" x-text="m.notes"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+
+    <!-- ================= MODAL DIALOGS ================= -->
+
+    <!-- MODAL 1: ADD / EDIT CATALOG ITEM -->
+    <div x-show="openAddItemModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div @click.away="openAddItemModal = false" class="bg-white rounded-2xl shadow-xl max-w-lg w-full overflow-hidden border border-slate-100">
+            <div class="px-6 py-4 bg-slate-800 text-white flex justify-between items-center">
+                <h3 class="font-bold text-base flex items-center space-x-2">
+                    <i class="fa-solid fa-box text-brand-400"></i>
+                    <span x-text="editingItemId ? 'Kemaskini Peralatan' : 'Daftar Alatan Baru'"></span>
+                </h3>
+                <button @click="openAddItemModal = false" class="text-slate-400 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form @submit.prevent="saveCatalogItem" class="p-6 space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Kod Bar / SKU</label>
+                        <input type="text" x-model="itemForm.barcode" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-brand-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Nama Peralatan</label>
+                        <input type="text" x-model="itemForm.name" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-brand-500">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Kategori</label>
+                        <select x-model="itemForm.category" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-brand-500">
+                            <option value="Bola">Bola</option>
+                            <option value="Raket">Raket</option>
+                            <option value="Pakaian">Pakaian</option>
+                            <option value="Latihan">Latihan / Fitness</option>
+                            <option value="Keselamatan">Keselamatan</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Gred / Kegunaan</label>
+                        <select x-model="itemForm.grade" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-brand-500">
+                            <option value="Gred A (Pertandingan)">Gred A (Pertandingan)</option>
+                            <option value="Gred B (Latihan)">Gred B (Latihan)</option>
+                            <option value="Umum">Umum</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Lokasi Rak</label>
+                        <input type="text" x-model="itemForm.location" placeholder="cth: Rak A-01" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-brand-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Jumlah Stok</label>
+                        <input type="number" x-model.number="itemForm.totalStock" min="0" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-brand-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Rosak / Lupus</label>
+                        <input type="number" x-model.number="itemForm.damaged" min="0" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-brand-500">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Kos Seunit (RM)</label>
+                    <input type="number" step="0.01" x-model.number="itemForm.unitCost" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-brand-500">
+                </div>
+
+                <div class="pt-4 flex justify-end space-x-2 border-t border-slate-100">
+                    <button type="button" @click="openAddItemModal = false" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Batal</button>
+                    <button type="submit" class="px-5 py-2 rounded-xl text-xs font-semibold bg-brand-600 hover:bg-brand-700 text-white shadow-sm">Simpan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 2: CREATE BORROW LOG -->
+    <div x-show="openBorrowModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div @click.away="openBorrowModal = false" class="bg-white rounded-2xl shadow-xl max-w-lg w-full overflow-hidden border border-slate-100">
+            <div class="px-6 py-4 bg-slate-800 text-white flex justify-between items-center">
+                <h3 class="font-bold text-base flex items-center space-x-2">
+                    <i class="fa-solid fa-hand-holding text-brand-400"></i>
+                    <span>Cipta Log Pinjaman Alatan</span>
+                </h3>
+                <button @click="openBorrowModal = false" class="text-slate-400 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form @submit.prevent="saveBorrowLog" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Pilih Peralatan</label>
+                    <select x-model="borrowForm.itemId" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-brand-500">
+                        <option value="">-- Pilih Item --</option>
+                        <template x-for="item in items" :key="item.id">
+                            <option :value="item.id" x-text="item.name + ' (Baki Sedia Ada: ' + calculateAvailable(item) + ')'" :disabled="calculateAvailable(item) <= 0"></option>
+                        </template>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Pilih Peminjam (Ahli / Jurulatih)</label>
+                    <select x-model="borrowForm.memberId" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-brand-500">
+                        <option value="">-- Pilih Ahli --</option>
+                        <template x-for="m in members" :key="m.id">
+                            <option :value="m.id" x-text="m.name + ' (' + m.role + ' - ' + m.squad + ')'"></option>
+                        </template>
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Kuantiti Pinjam</label>
+                        <input type="number" x-model.number="borrowForm.qty" min="1" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-brand-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Tarikh Jangka Pulang</label>
+                        <input type="date" x-model="borrowForm.dueDate" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-brand-500">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Tujuan / Sesi Perlawanan</label>
+                    <input type="text" x-model="borrowForm.purpose" placeholder="cth: Latihan Petang Skuad U-23" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-brand-500">
+                </div>
+
+                <div class="pt-4 flex justify-end space-x-2 border-t border-slate-100">
+                    <button type="button" @click="openBorrowModal = false" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Batal</button>
+                    <button type="submit" class="px-5 py-2 rounded-xl text-xs font-semibold bg-brand-600 hover:bg-brand-700 text-white shadow-sm">Keluarkan Alatan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 3: ADD MEMBER -->
+    <div x-show="openAddMemberModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div @click.away="openAddMemberModal = false" class="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden border border-slate-100">
+            <div class="px-6 py-4 bg-slate-800 text-white flex justify-between items-center">
+                <h3 class="font-bold text-base flex items-center space-x-2">
+                    <i class="fa-solid fa-user-plus text-brand-400"></i>
+                    <span>Daftar Ahli / Jurulatih Baru</span>
+                </h3>
+                <button @click="openAddMemberModal = false" class="text-slate-400 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form @submit.prevent="saveMember" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Nama Penuh</label>
+                    <input type="text" x-model="memberForm.name" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-brand-500">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Peranan</label>
+                        <select x-model="memberForm.role" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-brand-500">
+                            <option value="Jurulatih">Jurulatih</option>
+                            <option value="Atlet / Pemain">Atlet / Pemain</option>
+                            <option value="Pegawai Kelab">Pegawai Kelab</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Skuad / Kategori</label>
+                        <select x-model="memberForm.squad" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-brand-500">
+                            <option value="Skuad Utama (U-23)">Skuad Utama (U-23)</option>
+                            <option value="Skuad Remaja (U-18)">Skuad Remaja (U-18)</option>
+                            <option value="Terbuka">Terbuka</option>
+                            <option value="Badminton">Badminton</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">No. Telefon</label>
+                    <input type="text" x-model="memberForm.phone" placeholder="012-3456789" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-brand-500">
+                </div>
+
+                <div class="pt-4 flex justify-end space-x-2 border-t border-slate-100">
+                    <button type="button" @click="openAddMemberModal = false" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Batal</button>
+                    <button type="submit" class="px-5 py-2 rounded-xl text-xs font-semibold bg-brand-600 hover:bg-brand-700 text-white shadow-sm">Simpan Ahli</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 4: ADD MAINTENANCE LOG -->
+    <div x-show="openMaintenanceModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div @click.away="openMaintenanceModal = false" class="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden border border-slate-100">
+            <div class="px-6 py-4 bg-slate-800 text-white flex justify-between items-center">
+                <h3 class="font-bold text-base flex items-center space-x-2">
+                    <i class="fa-solid fa-wrench text-brand-400"></i>
+                    <span>Rekod Penyelenggaraan / Belian</span>
+                </h3>
+                <button @click="openMaintenanceModal = false" class="text-slate-400 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form @submit.prevent="saveMaintenanceLog" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Pilih Peralatan</label>
+                    <select x-model="maintenanceForm.itemId" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-brand-500">
+                        <option value="">-- Pilih Item --</option>
+                        <template x-for="item in items" :key="item.id">
+                            <option :value="item.id" x-text="item.name"></option>
+                        </template>
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Jenis Tindakan</label>
+                        <select x-model="maintenanceForm.type" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-brand-500">
+                            <option value="Belian Baru">Belian Baru</option>
+                            <option value="Penyelenggaraan">Penyelenggaraan / Baiki</option>
+                            <option value="Pelupusan">Pelupusan (Rosak Total)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Kuantiti Unit</label>
+                        <input type="number" x-model.number="maintenanceForm.qty" min="1" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-brand-500">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Kos Terlibat (RM)</label>
+                        <input type="number" step="0.01" x-model.number="maintenanceForm.cost" min="0" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-brand-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Sumber Dana</label>
+                        <input type="text" x-model="maintenanceForm.funding" placeholder="cth: Peruntukan Kelab" required class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-brand-500">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Catatan Kerosakan / Baiki</label>
+                    <textarea x-model="maintenanceForm.notes" rows="2" placeholder="Sebab rosak atau butiran pembaikan..." class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-brand-500"></textarea>
+                </div>
+
+                <div class="pt-4 flex justify-end space-x-2 border-t border-slate-100">
+                    <button type="button" @click="openMaintenanceModal = false" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">Batal</button>
+                    <button type="submit" class="px-5 py-2 rounded-xl text-xs font-semibold bg-brand-600 hover:bg-brand-700 text-white shadow-sm">Rekodkan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 5: BARCODE SCANNER SIMULATOR -->
+    <div x-show="openScannerModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <div @click.away="openScannerModal = false" class="bg-white rounded-2xl shadow-xl max-w-sm w-full overflow-hidden border border-slate-100">
+            <div class="px-6 py-4 bg-slate-800 text-white flex justify-between items-center">
+                <h3 class="font-bold text-base flex items-center space-x-2">
+                    <i class="fa-solid fa-qrcode text-emerald-400"></i>
+                    <span>Imbasan Kod Bar (Simulator)</span>
+                </h3>
+                <button @click="openScannerModal = false" class="text-slate-400 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-6 text-center space-y-4">
+                <!-- Scanner Viewport Graphic -->
+                <div class="w-full h-44 bg-slate-900 rounded-xl relative flex items-center justify-center overflow-hidden border-2 border-emerald-500">
+                    <div class="absolute inset-0 bg-emerald-500/10 animate-pulse"></div>
+                    <div class="w-48 h-0.5 bg-emerald-400 shadow-[0_0_8px_#34d399] animate-bounce"></div>
+                    <i class="fa-solid fa-barcode text-slate-600 text-6xl"></i>
+                </div>
+
+                <p class="text-xs text-slate-500">Pilih kod bar simulasi untuk melihat maklumat carian item automatik:</p>
+
+                <select x-model="scannedBarcode" @change="handleScanResult()" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-emerald-500">
+                    <option value="">-- Pilih Imbasan Kod Bar --</option>
+                    <template x-for="item in items" :key="item.id">
+                        <option :value="item.barcode" x-text="item.barcode + ' - ' + item.name"></option>
+                    </template>
+                </select>
+
+                <div class="pt-2">
+                    <button @click="openScannerModal = false" class="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs">Tutup</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- APP CONTROLLER JAVASCRIPT LOGIC -->
+    <script>
+        function inventoryApp() {
+            return {
+                activeTab: 'dashboard',
+                
+                // Modals Controls
+                openAddItemModal: false,
+                openBorrowModal: false,
+                openAddMemberModal: false,
+                openMaintenanceModal: false,
+                openScannerModal: false,
+
+                // Filters & Searches
+                searchCatalog: '',
+                filterCategory: '',
+                filterGrade: '',
+                searchLogs: '',
+                filterLogStatus: '',
+                searchMembers: '',
+                scannedBarcode: '',
+                editingItemId: null,
+
+                // Master Data: Items Catalog
+                items: [
+                    { id: 'SP001', barcode: '95500111', name: 'Bola Sepak (Match)', category: 'Bola', grade: 'Gred A (Pertandingan)', location: 'Rak A-01', totalStock: 10, damaged: 1, unitCost: 180.00 },
+                    { id: 'SP002', barcode: '95500112', name: 'Bola Sepak (Training)', category: 'Bola', grade: 'Gred B (Latihan)', location: 'Rak A-02', totalStock: 30, damaged: 2, unitCost: 65.00 },
+                    { id: 'SP003', barcode: '95500113', name: 'Raket Badminton', category: 'Raket', grade: 'Umum', location: 'Rak B-01', totalStock: 15, damaged: 0, unitCost: 120.00 },
+                    { id: 'SP004', barcode: '95500114', name: 'Jersi Latihan (M)', category: 'Pakaian', grade: 'Gred B (Latihan)', location: 'Almari 1', totalStock: 25, damaged: 0, unitCost: 35.00 },
+                    { id: 'SP005', barcode: '95500115', name: 'Set Kon Latihan (50 unit)', category: 'Latihan', grade: 'Umum', location: 'Rak C-02', totalStock: 8, damaged: 1, unitCost: 45.00 },
+                    { id: 'SP006', barcode: '95500116', name: 'Peti Pertolongan Cemas', category: 'Keselamatan', grade: 'Umum', location: 'Meja Utama', totalStock: 4, damaged: 0, unitCost: 90.00 }
+                ],
+
+                // Members Registry
+                members: [
+                    { id: 'MEM001', name: 'Coach Hafiz', role: 'Jurulatih', squad: 'Skuad Utama (U-23)', phone: '012-3456789', status: 'Aktif' },
+                    { id: 'MEM002', name: 'Amirul Asyraf', role: 'Atlet / Pemain', squad: 'Skuad Remaja (U-18)', phone: '017-8901234', status: 'Aktif' },
+                    { id: 'MEM003', name: 'Siti Nurhaliza', role: 'Jurulatih', squad: 'Badminton', phone: '019-7654321', status: 'Aktif' },
+                    { id: 'MEM004', name: 'Farhan Zaidi', role: 'Atlet / Pemain', squad: 'Terbuka', phone: '013-1122334', status: 'Aktif' }
+                ],
+
+                // Borrowing Logs
+                logs: [
+                    { id: 'LOG001', issueDate: '2026-11-01', itemId: 'SP002', memberId: 'MEM001', qty: 8, purpose: 'Latihan Petang U-23', dueDate: '2026-11-01', returnDate: '2026-11-01', status: 'Dipulangkan' },
+                    { id: 'LOG002', issueDate: '2026-11-05', itemId: 'SP001', memberId: 'MEM001', qty: 5, purpose: 'Friendly Match vs Kelab B', dueDate: '2026-11-06', returnDate: null, status: 'Dipinjam' },
+                    { id: 'LOG003', issueDate: '2026-11-06', itemId: 'SP003', memberId: 'MEM003', qty: 3, purpose: 'Latihan Badminton', dueDate: '2026-11-06', returnDate: null, status: 'Dipinjam' },
+                    { id: 'LOG004', issueDate: '2026-10-30', itemId: 'SP005', memberId: 'MEM002', qty: 2, purpose: 'Latihan Skuad U-18', dueDate: '2026-11-02', returnDate: null, status: 'Dipinjam' }
+                ],
+
+                // Maintenance Logs
+                maintenanceLogs: [
+                    { id: 'MNT001', date: '2026-11-01', itemId: 'SP001', qty: 2, type: 'Belian Baru', cost: 360.00, funding: 'Peruntukan Kelab', notes: 'Pembelian bola pertandingan rasmi' },
+                    { id: 'MNT002', date: '2026-11-03', itemId: 'SP002', qty: 2, type: 'Pelupusan', cost: 0.00, funding: '-', notes: 'Bola bocor / koyak total' },
+                    { id: 'MNT003', date: '2026-11-04', itemId: 'SP001', qty: 1, type: 'Penyelenggaraan', cost: 15.00, funding: 'Tabung Kelab', notes: 'Penukaran injap angin bola' }
+                ],
+
+                // Forms State
+                itemForm: { barcode: '', name: '', category: 'Bola', grade: 'Gred A (Pertandingan)', location: '', totalStock: 0, damaged: 0, unitCost: 0 },
+                borrowForm: { itemId: '', memberId: '', qty: 1, dueDate: '', purpose: '' },
+                memberForm: { name: '', role: 'Atlet / Pemain', squad: 'Skuad Utama (U-23)', phone: '' },
+                maintenanceForm: { itemId: '', type: 'Belian Baru', qty: 1, cost: 0, funding: 'Peruntukan Kelab', notes: '' },
+
+                // Computed Properties
+                get totalStockCount() {
+                    return this.items.reduce((sum, item) => sum + item.totalStock, 0);
+                },
+                get totalBorrowedCount() {
+                    return this.logs
+                        .filter(l => l.status === 'Dipinjam')
+                        .reduce((sum, l) => sum + l.qty, 0);
+                },
+                get totalDamagedCount() {
+                    return this.items.reduce((sum, item) => sum + item.damaged, 0);
+                },
+                get totalAssetValue() {
+                    return this.items.reduce((sum, item) => sum + (item.totalStock * item.unitCost), 0);
+                },
+                get overdueLogs() {
+                    const todayStr = '2026-11-07'; // System Date
+                    return this.logs.filter(l => l.status === 'Dipinjam' && l.dueDate < todayStr);
+                },
+                get totalNewPurchasesCost() {
+                    return this.maintenanceLogs.filter(m => m.type === 'Belian Baru').reduce((sum, m) => sum + m.cost, 0);
+                },
+                get totalRepairCost() {
+                    return this.maintenanceLogs.filter(m => m.type === 'Penyelenggaraan').reduce((sum, m) => sum + m.cost, 0);
+                },
+                get totalDisposedQty() {
+                    return this.maintenanceLogs.filter(m => m.type === 'Pelupusan').reduce((sum, m) => sum + m.qty, 0);
+                },
+
+                // Filters
+                get filteredCatalog() {
+                    return this.items.filter(item => {
+                        const matchesSearch = item.name.toLowerCase().includes(this.searchCatalog.toLowerCase()) ||
+                                              item.id.toLowerCase().includes(this.searchCatalog.toLowerCase()) ||
+                                              item.location.toLowerCase().includes(this.searchCatalog.toLowerCase());
+                        const matchesCategory = this.filterCategory === '' || item.category === this.filterCategory;
+                        const matchesGrade = this.filterGrade === '' || item.grade === this.filterGrade;
+                        return matchesSearch && matchesCategory && matchesGrade;
+                    });
+                },
+                get filteredLogs() {
+                    return this.logs.filter(log => {
+                        const itemName = this.getItemName(log.itemId).toLowerCase();
+                        const memberName = this.getMemberName(log.memberId).toLowerCase();
+                        const matchesSearch = itemName.includes(this.searchLogs.toLowerCase()) || memberName.includes(this.searchLogs.toLowerCase());
+                        
+                        let matchesStatus = true;
+                        if (this.filterLogStatus === 'Overdue') {
+                            matchesStatus = this.isOverdue(log);
+                        } else if (this.filterLogStatus !== '') {
+                            matchesStatus = log.status === this.filterLogStatus;
+                        }
+                        return matchesSearch && matchesStatus;
+                    });
+                },
+                get filteredMembers() {
+                    return this.members.filter(m => 
+                        m.name.toLowerCase().includes(this.searchMembers.toLowerCase()) ||
+                        m.squad.toLowerCase().includes(this.searchMembers.toLowerCase()) ||
+                        m.phone.includes(this.searchMembers)
+                    );
+                },
+
+                // Helper Functions
+                getItemName(id) {
+                    const item = this.items.find(i => i.id === id);
+                    return item ? item.name : id;
+                },
+                getMemberName(id) {
+                    const m = this.members.find(mem => mem.id === id);
+                    return m ? m.name : id;
+                },
+                getMemberSquad(id) {
+                    const m = this.members.find(mem => mem.id === id);
+                    return m ? m.squad : '';
+                },
+                getBorrowedCountForItem(itemId) {
+                    return this.logs
+                        .filter(l => l.itemId === itemId && l.status === 'Dipinjam')
+                        .reduce((sum, l) => sum + l.qty, 0);
+                },
+                calculateAvailable(item) {
+                    const borrowed = this.getBorrowedCountForItem(item.id);
+                    return item.totalStock - borrowed - item.damaged;
+                },
+                isOverdue(log) {
+                    const todayStr = '2026-11-07';
+                    return log.status === 'Dipinjam' && log.dueDate < todayStr;
+                },
+                getActiveLoansForMember(memberId) {
+                    return this.logs.filter(l => l.memberId === memberId && l.status === 'Dipinjam').length;
+                },
+
+                // Actions
+                saveCatalogItem() {
+                    if (this.editingItemId) {
+                        const index = this.items.findIndex(i => i.id === this.editingItemId);
+                        if (index !== -1) {
+                            this.items[index] = { ...this.items[index], ...this.itemForm };
+                        }
+                        this.editingItemId = null;
+                    } else {
+                        const newId = 'SP' + String(this.items.length + 1).padStart(3, '0');
+                        this.items.push({ id: newId, ...this.itemForm });
+                    }
+                    this.openAddItemModal = false;
+                    this.resetItemForm();
+                    this.updateCharts();
+                },
+                editItem(item) {
+                    this.editingItemId = item.id;
+                    this.itemForm = { ...item };
+                    this.openAddItemModal = true;
+                },
+                deleteItem(id) {
+                    if (confirm('Adakah anda pasti untuk memadam item ini dari katalog?')) {
+                        this.items = this.items.filter(i => i.id !== id);
+                        this.updateCharts();
+                    }
+                },
+                saveBorrowLog() {
+                    const newLogId = 'LOG' + String(this.logs.length + 1).padStart(3, '0');
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    this.logs.unshift({
+                        id: newLogId,
+                        issueDate: todayStr,
+                        itemId: this.borrowForm.itemId,
+                        memberId: this.borrowForm.memberId,
+                        qty: this.borrowForm.qty,
+                        purpose: this.borrowForm.purpose,
+                        dueDate: this.borrowForm.dueDate,
+                        returnDate: null,
+                        status: 'Dipinjam'
+                    });
+                    this.openBorrowModal = false;
+                    this.borrowForm = { itemId: '', memberId: '', qty: 1, dueDate: '', purpose: '' };
+                    this.updateCharts();
+                },
+                returnItem(logId) {
+                    const log = this.logs.find(l => l.id === logId);
+                    if (log) {
+                        log.status = 'Dipulangkan';
+                        log.returnDate = new Date().toISOString().split('T')[0];
+                        this.updateCharts();
+                    }
+                },
+                saveMember() {
+                    const newMemId = 'MEM' + String(this.members.length + 1).padStart(3, '0');
+                    this.members.push({ id: newMemId, ...this.memberForm, status: 'Aktif' });
+                    this.openAddMemberModal = false;
+                    this.memberForm = { name: '', role: 'Atlet / Pemain', squad: 'Skuad Utama (U-23)', phone: '' };
+                },
+                deleteMember(id) {
+                    if (confirm('Padam rekod ahli ini?')) {
+                        this.members = this.members.filter(m => m.id !== id);
+                    }
+                },
+                saveMaintenanceLog() {
+                    const newMntId = 'MNT' + String(this.maintenanceLogs.length + 1).padStart(3, '0');
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    this.maintenanceLogs.unshift({
+                        id: newMntId,
+                        date: todayStr,
+                        itemId: this.maintenanceForm.itemId,
+                        qty: this.maintenanceForm.qty,
+                        type: this.maintenanceForm.type,
+                        cost: this.maintenanceForm.cost,
+                        funding: this.maintenanceForm.funding,
+                        notes: this.maintenanceForm.notes
+                    });
+
+                    // If it's a damaged/disposal type, increase damaged count in item master
+                    if (this.maintenanceForm.type === 'Pelupusan') {
+                        const item = this.items.find(i => i.id === this.maintenanceForm.itemId);
+                        if (item) item.damaged += this.maintenanceForm.qty;
+                    }
+                    // If new purchase, add total stock
+                    if (this.maintenanceForm.type === 'Belian Baru') {
+                        const item = this.items.find(i => i.id === this.maintenanceForm.itemId);
+                        if (item) item.totalStock += this.maintenanceForm.qty;
+                    }
+
+                    this.openMaintenanceModal = false;
+                    this.maintenanceForm = { itemId: '', type: 'Belian Baru', qty: 1, cost: 0, funding: 'Peruntukan Kelab', notes: '' };
+                    this.updateCharts();
+                },
+                resetItemForm() {
+                    this.itemForm = { barcode: '', name: '', category: 'Bola', grade: 'Gred A (Pertandingan)', location: '', totalStock: 0, damaged: 0, unitCost: 0 };
+                },
+                handleScanResult() {
+                    if (!this.scannedBarcode) return;
+                    const found = this.items.find(i => i.barcode === this.scannedBarcode);
+                    if (found) {
+                        this.searchCatalog = found.name;
+                        this.activeTab = 'katalog';
+                        this.openScannerModal = false;
+                    } else {
+                        alert('Kod bar tidak dijumpai dalam inventori!');
+                    }
+                    this.scannedBarcode = '';
+                },
+
+                // Chart initialization
+                categoryChartObj: null,
+                statusChartObj: null,
+                initCharts() {
+                    this.$nextTick(() => {
+                        // Category Bar Chart
+                        const ctxCat = document.getElementById('categoryChart').getContext('2d');
+                        this.categoryChartObj = new Chart(ctxCat, {
+                            type: 'bar',
+                            data: this.getCategoryChartData(),
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: { legend: { display: false } },
+                                scales: { y: { beginAtZero: true } }
+                            }
+                        });
+
+                        // Status Pie Chart
+                        const ctxStat = document.getElementById('statusChart').getContext('2d');
+                        this.statusChartObj = new Chart(ctxStat, {
+                            type: 'doughnut',
+                            data: this.getStatusChartData(),
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: { legend: { position: 'bottom' } }
+                            }
+                        });
+                    });
+                },
+                getCategoryChartData() {
+                    const categories = ['Bola', 'Raket', 'Pakaian', 'Latihan', 'Keselamatan'];
+                    const counts = categories.map(cat => 
+                        this.items.filter(i => i.category === cat).reduce((s, i) => s + i.totalStock, 0)
+                    );
+                    return {
+                        labels: categories,
+                        datasets: [{
+                            data: counts,
+                            backgroundColor: ['#0284c7', '#6366f1', '#10b981', '#f59e0b', '#ef4444'],
+                            borderRadius: 6
+                        }]
+                    };
+                },
+                getStatusChartData() {
+                    const availableTotal = this.items.reduce((s, i) => s + this.calculateAvailable(i), 0);
+                    const borrowedTotal = this.totalBorrowedCount;
+                    const damagedTotal = this.totalDamagedCount;
+                    return {
+                        labels: ['Baki Sedia Ada', 'Sedang Dipinjam', 'Rosak / Lupus'],
+                        datasets: [{
+                            data: [availableTotal, borrowedTotal, damagedTotal],
+                            backgroundColor: ['#10b981', '#f59e0b', '#ef4444']
+                        }]
+                    };
+                },
+                updateCharts() {
+                    if (this.categoryChartObj && this.statusChartObj) {
+                        this.categoryChartObj.data = this.getCategoryChartData();
+                        this.categoryChartObj.update();
+                        this.statusChartObj.data = this.getStatusChartData();
+                        this.statusChartObj.update();
+                    }
+                }
+            };
+        }
+    </script>
+</body>
+</html>
